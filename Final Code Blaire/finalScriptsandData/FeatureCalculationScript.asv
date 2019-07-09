@@ -1,0 +1,6 @@
+%%generate training and testing data
+
+[training_input,training_class] = getFeatureArraywithdtw(stallTrainingData,stallTrainingData);
+[testing_input,testing_class] = getFeatureArraywithdtw(stallTestingData,stallTrainingData);
+
+%%

@@ -1,0 +1,59 @@
+function [model_input,class] = getFeatureArraywithdtw(stallDataFile,trainingstallDataFile)
+% output a model input array and a class vector based on a stall data file
+%Input: "stallDataFile" is a struct with fields that has experimet, run, point,
+%iteration, count_data, PO2 data, usable flux, and stall 
+%input: "trainingstallDataFile" is a stall training fata
+    feature_num = 13;
+    [~,num_data_points] = size(stallDataFile);
+    model_input = zeros(num_data_points,feature_num);
+    class = zeros(num_data_points,1);
+    
+    for iData = 1:num_data_points
+        count_data = stallDataFile(iData).Count_Data;
+        po2 = stallDataFile(iData).PO2_Data;
+        
+        model_input(iData,1) = mean(count_data);
+        model_input(iData,2) = std(count_data);
+        model_input(iData,3) = po2;
+        model_input(iData,4) = mean(pentropy(count_data,length(count_data)/4)); %spectral entropy
+        model_input(iData,5) = snr(count_data); %signal to noise ratio
+        model_input(iData,6) = getFrequencyRangeAmplitude(count_data,[30 500],.3/1000); % fraction of power contained in lower frequencies
+        
+        [model_input(iData,7),model_input(iData,8)] = averageDTWNN(count_data,trainingstallDataFile,100); % get the average dtw distance to the 5 nearest training samples with and without stall
+        model_input(iData,9) = peak2rms(count_data);
+        model_input(iData,10) = peak2peak(count_data);
+        model_input(iData,11) = meanfreq(count_data);
+        model_input(iData,12) = medfreq(count_data);
+        
+        class(iData)= stallDataFile(iData).Stall;
+    end
+
+end
+
+function [power_fraction] = getFrequencyRangeAmplitude(Data,freq_range,tx)
+%% getFrequencyRangeAmplitude function
+%This function takes in a frequency range and dataset and outputs the
+%amount of energy contained in that frequency range
+
+% data = amp data
+% freq_range = range of frequencies to measure energy, [30 500] seems like
+% a good range for this dataset
+% tx = the amount of time that passes between data points
+L = length(Data);
+tx = tx; % sampling period
+centered_data = Data-mean(Data); % center the data at 0 to remove the DC freq
+ft = fft(centered_data); % fourier transform of the data
+ft_centered = fftshift(ft); % center the fourier transform
+power = abs(ft_centered).^2; % gets the power of the signal at all frequencies
+
+f_max = 1/tx; % get max freq
+f_step = (1/(L/2))*f_max; % step size of f
+num_data_points_bottom = round(freq_range(1)/f_step);
+num_data_points_top = round(freq_range(2)/f_step); % calculate how many data points to count from 0 Hz to X Hz
+
+power_in_range_desired = sum(power((L/2+1+num_data_points_bottom):(L/2+1+num_data_points_top)));% sum the power over the frequency ranges from 0-200 HZ
+power_total = sum(power((L/2+1):L));
+power_fraction = power_in_range_desired/power_total;
+
+end
+
